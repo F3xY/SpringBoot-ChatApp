@@ -2,8 +2,8 @@ package ch.admin.seco.alv.demo.web.controller;
 
 import ch.admin.seco.alv.demo.service.MessageService;
 import ch.admin.seco.alv.demo.web.socket.WebSocketController;
-import ch.admin.seco.alv.demo.web.message.CreateMessage;
-import ch.admin.seco.alv.demo.web.message.Message;
+import ch.admin.seco.alv.demo.web.dto.message.CreateMessageDto;
+import ch.admin.seco.alv.demo.web.dto.message.MessageDto;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,24 +20,31 @@ public class MessageController {
     }
 
     @GetMapping
-    public List<Message> getAll() {
+    public List<MessageDto> getAll() {
         return messageService.getAll();
     }
 
     @GetMapping("{id}")
-    public Message getById(@RequestParam(name = "id") final int id) {
+    public MessageDto getById(@PathVariable int id) {
         return messageService.getById(id);
     }
 
     @PostMapping
-    public Message create(@RequestBody CreateMessage createMessage){
-        Message message = messageService.create(createMessage);
-        webSocketController.sendPayload("message_added",message);
-        return  message;
+    public MessageDto create(@RequestBody CreateMessageDto createMessageDto){
+        MessageDto messageDto = messageService.create(createMessageDto);
+        webSocketController.sendPayload("message_added",messageDto);
+        return messageDto;
     }
 
     @DeleteMapping("{id}")
-    public void delete(@RequestParam(name = "id") final int id){
+    public void delete(@PathVariable int id){
         messageService.deleteById(id);
+        System.out.println("Message deleted");
+        webSocketController.sendPayload("message_deleted",id);
+    }
+
+    @DeleteMapping
+    public void deleteAllMessages() {
+        messageService.deleteAll();
     }
 }

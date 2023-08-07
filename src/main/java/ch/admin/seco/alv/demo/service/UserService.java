@@ -1,79 +1,107 @@
 package ch.admin.seco.alv.demo.service;
 
-import ch.admin.seco.alv.demo.data.UserEntity;
+import ch.admin.seco.alv.demo.data.User;
 import ch.admin.seco.alv.demo.data.UserRepository;
-import ch.admin.seco.alv.demo.web.user.CreateUser;
-import ch.admin.seco.alv.demo.web.user.UpdateUser;
-import ch.admin.seco.alv.demo.web.user.User;
-import ch.admin.seco.alv.demo.web.user.UserStatus;
+import ch.admin.seco.alv.demo.web.dto.user.CreateUserDto;
+import ch.admin.seco.alv.demo.web.dto.user.UpdateUserDto;
+import ch.admin.seco.alv.demo.web.dto.user.UserDto;
+import ch.admin.seco.alv.demo.web.dto.user.Status;
+import ch.admin.seco.alv.demo.web.socket.WebSocketController;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 public class UserService {
 
-    private UserRepository userRepository;
+    private final UserRepository userRepository;
+    private final WebSocketController webSocketController;
 
-    public UserService(UserRepository userRepository) {
+    public UserService(UserRepository userRepository, WebSocketController webSocketController) {
         this.userRepository = userRepository;
+        this.webSocketController = webSocketController;
     }
 
-    public List<User> getAll() {
-        return maptoUser(userRepository.findAll());
+    public List<UserDto> getAll() {
+        return userRepository.findAll().stream().map(this::convertToDto).collect(Collectors.toList());
     }
 
-    public User getById(final int id) {
-        return mapToUser(userRepository.getOne(id));
+    public UserDto getById(final int id) {
+        return convertToDto(userRepository.getOne(id));
     }
 
-    public User create(CreateUser createUser) {
-        final UserEntity userEntity = userRepository.save(new UserEntity(
-                createUser.getNickname(),
-                UserStatus.online
-        ));
-        return mapToUser(userEntity);
-    }
-
-    public User update(final int id, UpdateUser updateUser) {
-        final UserEntity userEntity = userRepository.getOne(id);
-        if (updateUser.getNickname() != null) {
-            userEntity.setNickname(updateUser.getNickname());
+    public UserDto create(CreateUserDto createUserDto) {
+        User user = doesUserExist(createUserDto.getNickname());
+        if (user == null){
+            user = userRepository.save(new User(
+                    createUserDto.getNickname(),
+                    createUserDto.getStatus(),
+                    createUserDto.getAvatar(),
+                    createUserDto.getUpdated()
+            ));
+            System.out.println("Create user with ID " + user.getId());
+            webSocketController.sendPayload("user_added", convertToDto(user));
+        } else {
+            System.out.println("User exists already " + user.getId());
         }
-        if (updateUser.getStatus() != null) {
-            switch (updateUser.getStatus()){
-                case "online":
-                    userEntity.setStatus(UserStatus.online);
-                case "offline":
-                    userEntity.setStatus(UserStatus.offline);
-                case "away":
-                    userEntity.setStatus(UserStatus.away);
+        return convertToDto(user);
+    }
+
+    private User doesUserExist(String username){
+        List<User> users = userRepository.findAll();
+        for (User user : users) {
+            if (Objects.equals(user.getNickname(), username)){
+               return user;
             }
         }
-        return mapToUser(userRepository.save(userEntity));
+        return null;
     }
 
-    public User deleteById(final int id){
-        User delUser = getById(id);
+    public UserDto updateUser(final int id, UpdateUserDto updateUserDto) {
+        final User user = userRepository.getOne(id);
+        user.setNickname(user.getNickname());
+        user.setStatus(updateUserDto.getStatus());
+        user.setAvatar(user.getAvatar());
+        System.out.println("Update user with ID " + user.getId());
+        return convertToDto(userRepository.save(user));
+    }
+
+    public void deleteById(final int id){
         userRepository.deleteById(id);
-        return delUser;
     }
 
+    public void deleteAll() {
+        userRepository.deleteAll();
+    }
 
-    private static List<User> maptoUser(final List<UserEntity> userEntities) {
-        final List<User> users = new ArrayList<>();
-        for (final UserEntity userEntity : userEntities) {
-            users.add(mapToUser(userEntity));
+    public void updateStatus(){
+        List<User> users = userRepository.findAll();
+        Instant away = Instant.now().minus(30, ChronoUnit.MINUTES);
+        Instant offline = away.minus(30, ChronoUnit.MINUTES);
+
+        for (User user: users) {
+            Instant lastUpdate = user.getUpdated();
+            if (lastUpdate.isAfter(offline)){
+                user.setStatus(Status.online);
+                userRepository.save(user);
+            } else if(lastUpdate.isAfter(away)){
+                user.setStatus(Status.away);
+                userRepository.save(user);
+            }
         }
-        return users;
     }
 
-    private static User mapToUser(final UserEntity userEntity) {
-        return new User(
-                userEntity.getId(),
-                userEntity.getNickname(),
-                userEntity.getStatus()
+    private UserDto convertToDto(User user){
+        return new UserDto(
+                user.getId(),
+                user.getNickname(),
+                user.getStatus(),
+                user.getAvatar(),
+                user.getUpdated()
         );
     }
 }

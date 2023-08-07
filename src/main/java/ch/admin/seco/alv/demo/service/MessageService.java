@@ -1,13 +1,14 @@
 package ch.admin.seco.alv.demo.service;
 
-import ch.admin.seco.alv.demo.data.MessageEntity;
+import ch.admin.seco.alv.demo.data.Message;
 import ch.admin.seco.alv.demo.data.MessageRepository;
-import ch.admin.seco.alv.demo.web.message.CreateMessage;
-import ch.admin.seco.alv.demo.web.message.Message;
+import ch.admin.seco.alv.demo.web.dto.message.CreateMessageDto;
+import ch.admin.seco.alv.demo.web.dto.message.MessageDto;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class MessageService {
@@ -18,44 +19,39 @@ public class MessageService {
         this.messageRepository = messageRepository;
     }
 
-    public List<Message> getAll() {
-        return mapToMessage(messageRepository.findAll());
+
+    public List<MessageDto> getAll() {
+        return messageRepository.findAll().stream().map(message -> convertToDto(message)).collect(Collectors.toList());
+
     }
 
-    public Message getById(final int id) {
-        return mapTomessage(messageRepository.getOne(id));
+    public MessageDto getById(final int id) {
+        return convertToDto(messageRepository.getOne(id));
     }
 
-    public Message create(CreateMessage createMessage) {
-        final MessageEntity messageEntity = messageRepository.save(new MessageEntity(
-                createMessage.getMessageText(),
-                createMessage.getUser_id()
+    public MessageDto create(CreateMessageDto createMessageDto) {
+        Message message = messageRepository.save(new Message(
+                createMessageDto.getMessage(),
+                createMessageDto.getUserId(),
+                createMessageDto.getTimestamp()
         ));
-        return mapTomessage(messageEntity);
+        return convertToDto(message);
     }
 
-    public void deleteById(int id) {
-        List<Message> messages = getAll();
-        for (Message message : messages){
-            if (message.getUser_id() == id){
-                messageRepository.deleteById(message.getId());
-            }
-        }
+    public void deleteById(final int id){
+        messageRepository.deleteById(id);
+    }
+    public void deleteAll() {
+        messageRepository.deleteAll();
     }
 
-    private static List<Message> mapToMessage(final List<MessageEntity> messageEntities) {
-        final List<Message> messages = new ArrayList<>();
-        for (final MessageEntity messageEntity : messageEntities) {
-            messages.add(mapTomessage(messageEntity));
-        }
-        return messages;
-    }
 
-    private static Message mapTomessage(final MessageEntity messageEntity) {
-        return new Message(
-                messageEntity.getMessageText(),
-                messageEntity.getUser_id(),
-                messageEntity.getId()
+    private MessageDto convertToDto(Message message) {
+        return new MessageDto(
+                message.getId(),
+                message.getMessage(),
+                message.getUserId(),
+                message.getTimestamp()
         );
     }
 }
